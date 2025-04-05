@@ -18,9 +18,9 @@ type User struct {
 
 const URL string = "https://dummyjson.com/users"
 
-func GetUserById(ctx context.Context, id int) (*User, error) {
-	url := fmt.Sprintf(URL+"/%d", id)
-	fmt.Printf("url is [%s]\n", url)
+func GetUserById(ctx context.Context, id int, delaySeconds int) (*User, error) {
+	url := fmt.Sprintf(URL+"/%d?delay=%d", id, delaySeconds)
+	fmt.Printf("fetching from [%s]\n", url)
 
 	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
@@ -61,7 +61,7 @@ func Do() (resCh chan Response) {
 			defer wg.Done()
 			ctx, cancelFunc := context.WithTimeout(ctx, time.Second*3)
 			defer cancelFunc()
-			user, err := GetUserById(ctx, id)
+			user, err := GetUserById(ctx, id, 3)
 			resCh <- Response{
 				User:  user,
 				Error: err,
