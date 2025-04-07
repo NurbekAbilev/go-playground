@@ -3,60 +3,58 @@ package main
 import (
 	"fmt"
 	"sync"
-	"time"
 )
 
-func broker(input chan int, numOfWorkers int) chan int {
-	if input == nil {
-		return nil
-	}
-	var wg sync.WaitGroup
-	output := make(chan int)
-	wg.Add(numOfWorkers)
-
-	for i := 0; i < numOfWorkers; i++ {
-		go func(workerId int) {
-			defer wg.Done()
-			for {
-				val, ok := <-input
-				fmt.Printf("worker %d received value %d\n", workerId, val)
-				if !ok {
-					fmt.Printf("worker %d stopped\n", workerId)
-					return
-				}
-				time.Sleep(time.Millisecond * 100)
-				output <- val * val
-			}
-		}(i)
+func fanout(input <-chan int, size int) []chan int {
+	fanout := make([]chan int, 0)
+	for i := 0; i < size; i++ {
+		ch := make(chan int)
+		fanout = append(fanout, ch)
 	}
 
 	go func() {
-		wg.Wait()
-		close(output)
+		for val := range input {
+			for _, ch := range fanout {
+				ch <- val
+			}
+		}
+
+		for _, ch := range fanout {
+			close(ch)
+		}
 	}()
 
-	return output
+	return fanout
+}
+
+func worker(name string, input <-chan int) {
+	for val := range input {
+		fmt.Printf("worker [%s] got value %d\n", name, val)
+	}
 }
 
 func main() {
 	input := make(chan int)
 
-	const N int = 20
 	go func() {
-		for i := 0; i < N; i++ {
+		for i := 0; i < 10; i++ {
 			input <- i
 		}
 		close(input)
 	}()
 
-	output := broker(input, 3)
+	const SIZE int = 2
+	fch := fanout(input, SIZE)
 
-	out := make([]int, 0)
-	for val := range output {
-		out = append(out, val)
+	var wg sync.WaitGroup
+
+	for i, ch := range fch {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			worker(fmt.Sprintf("Worker %d", i), ch)
+		}()
 	}
 
-	for _, val := range out {
-		fmt.Printf("output: %d\n", val)
-	}
+	wg.Wait()
 }
